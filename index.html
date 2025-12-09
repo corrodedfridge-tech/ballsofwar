@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Territory Battle Pro</title>
+    <style>
+        :root {
+            --bg-color: #000;
+            --text-color: #fff;
+            --accent: #FFD700;
+            --danger: #ff4444;
+            --bar-bg: #333;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Layout Grid */
+        #app-layout {
+            display: grid;
+            grid-template-rows: 60px 1fr 60px; /* Header, Game, Footer */
+            height: 100%;
+            width: 100%;
+            transition: all 0.3s ease;
+        }
+
+        /* Top Bar: Health & Names */
+        #top-bar {
+            background: rgba(0, 0, 0, 0.9);
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 40px;
+            z-index: 10;
+            transition: transform 0.3s ease-in-out;
+        }
+
+        .player-status {
+            display: flex;
+            flex-direction: column;
+            width: 35%;
+            gap: 5px;
+        }
+
+        .player-name {
+            font-size: 1.1rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .health-track {
+            width: 100%;
+            height: 12px;
+            background: var(--bar-bg);
+            border-radius: 6px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .health-fill {
+            height: 100%;
+            width: 100%;
+            transition: width 0.2s, background-color 0.3s;
+        }
+
+        /* Game Area */
+        #game-area {
+            position: relative;
+            background: #111;
+            /* Flex center ensures the canvas stays in the middle */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+            padding: 10px; /* Safety padding */
+            box-sizing: border-box;
+        }
+
+        canvas {
+            box-shadow: 0 0 50px rgba(0,0,0,0.5);
+            /* This ensures the canvas scales to fit within the 1fr space without stretching */
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        /* Bottom Bar: Controls */
+        #bottom-bar {
+            background: rgba(0, 0, 0, 0.9);
+            border-top: 1px solid #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            z-index: 10;
+            transition: transform 0.3s ease-in-out;
+        }
+
+        /* Hiding Logic for UI Bars */
+        .ui-hidden #top-bar {
+            transform: translateY(-100%);
+        }
+        
+        .ui-hidden #bottom-bar {
+            transform: translateY(100%);
+        }
+
+        /* Buttons */
+        .speed-btn {
+            background: transparent;
+            border: 1px solid #555;
+            color: #888;
+            padding: 8px 16px;
+            font-size: 0.9rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        
+        .speed-btn:hover { background: #222; }
+
+        .speed-btn.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #000;
+            box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+        }
+
+        .btn-stop {
+            background-color: var(--danger);
+            border: none;
+            color: white;
+            padding: 8px 24px;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-left: 20px;
+        }
+
+        /* Overlays (Menu/Victory) */
+        .overlay {
+            position: fixed; 
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            transition: opacity 0.3s;
+        }
+
+        .hidden {
+            opacity: 0;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        /* Menu Styling */
+        h1 {
+            font-size: 3rem;
+            text-transform: uppercase;
+            background: linear-gradient(to right, #fff, #888);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 30px;
+        }
+
+        .menu-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            margin-bottom: 40px;
+        }
+
+        .player-config {
+            background: rgba(255,255,255,0.05);
+            padding: 25px;
+            border-radius: 12px;
+            border: 1px solid #333;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            width: 300px;
+        }
+
+        .config-title {
+            color: #aaa;
+            font-size: 0.8rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            border-bottom: 1px solid #444;
+            padding-bottom: 10px;
+            margin-bottom: 5px;
+        }
+
+        .input-group label {
+            display: block;
+            font-size: 0.8rem;
+            margin-bottom: 5px;
+            color: #888;
+        }
+
+        .input-group input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            background: #222;
+            border: 1px solid #444;
+            color: white;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        /* File Upload Styling */
+        .input-group input[type="file"] {
+            width: 100%;
+            padding: 8px;
+            background: #222;
+            border: 1px solid #444;
+            color: #888;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 0.8rem;
+            cursor: pointer;
+        }
+
+        .input-group input[type="color"] {
+            width: 100%;
+            height: 40px;
+            border: none;
+            background: none;
+            cursor: pointer;
+        }
+
+        .btn-start {
+            background: linear-gradient(135deg, #FFD700, #FFA500);
+            color: #000;
+            font-size: 1.5rem;
+            padding: 20px 80px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.2);
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            transition: all 0.2s ease;
+        }
+        
+        .btn-start:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 30px rgba(255, 215, 0, 0.4);
+        }
+
+        .btn-start:active { transform: scale(0.98); }
+        
+        .btn-secondary {
+            background: #444;
+            color: #fff;
+            padding: 10px 30px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-top: 20px;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Main App Container -->
+    <div id="app-layout" class="ui-hidden">
+        
+        <!-- Top UI: Health Bars & Names -->
+        <div id="top-bar">
+            <!-- Left Player -->
+            <div class="player-status">
+                <div class="health-track">
+                    <div id="hp-bar-1" class="health-fill" style="background: #00d2ff; width: 100%;"></div>
+                </div>
+                <div id="name-display-1" class="player-name" style="color: #00d2ff; text-align: left;">Player 1</div>
+            </div>
+
+            <!-- VS Badge -->
+            <div style="font-weight:900; color:#444; font-size:1.5rem;">VS</div>
+
+            <!-- Right Player -->
+            <div class="player-status">
+                <div class="health-track">
+                    <div id="hp-bar-2" class="health-fill" style="background: #ff2a6d; width: 100%;"></div>
+                </div>
+                <div id="name-display-2" class="player-name" style="color: #ff2a6d; text-align: right;">Player 2</div>
+            </div>
+        </div>
+
+        <!-- Game Area -->
+        <div id="game-area">
+            <canvas id="simCanvas"></canvas>
+            
+            <!-- Main Menu Overlay -->
+            <div id="main-menu" class="overlay">
+                <h1>Territory Wars</h1>
+                
+                <div class="menu-grid">
+                    <!-- Player 1 Setup -->
+                    <div class="player-config">
+                        <div class="config-title">Player 1</div>
+                        
+                        <div class="input-group">
+                            <label>Name</label>
+                            <input type="text" id="p1-name" value="Blue Empire">
+                        </div>
+                        <div class="input-group">
+                            <label>Upload Image/Flag</label>
+                            <input type="file" id="p1-file" accept="image/*">
+                        </div>
+                        <div class="input-group">
+                            <label>Manual Color Override</label>
+                            <input type="color" id="p1-color" value="#00d2ff">
+                        </div>
+                    </div>
+
+                    <!-- Player 2 Setup -->
+                    <div class="player-config">
+                        <div class="config-title">Player 2</div>
+                        
+                        <div class="input-group">
+                            <label>Name</label>
+                            <input type="text" id="p2-name" value="Red Kingdom">
+                        </div>
+                        <div class="input-group">
+                            <label>Upload Image/Flag</label>
+                            <input type="file" id="p2-file" accept="image/*">
+                        </div>
+                        <div class="input-group">
+                            <label>Manual Color Override</label>
+                            <input type="color" id="p2-color" value="#ff2a6d">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Map Size Config (Small) -->
+                <div style="display:flex; gap:20px; margin-bottom:30px; color:#888;">
+                     <div class="input-group">
+                        <label>Rows</label>
+                        <input type="number" id="rowsInput" value="60" style="width:60px; text-align:center; padding:5px; background:#222; border:1px solid #444; color:#fff;">
+                    </div>
+                    <div class="input-group">
+                        <label>Cols</label>
+                        <input type="number" id="colsInput" value="80" style="width:60px; text-align:center; padding:5px; background:#222; border:1px solid #444; color:#fff;">
+                    </div>
+                </div>
+
+                <button class="btn-start" onclick="startSimulation()">START SIMULATION</button>
+            </div>
+
+            <!-- Victory Screen -->
+            <div id="victory-screen" class="overlay hidden">
+                <h1 id="winner-text">BLUE WINS!</h1>
+                <h2 style="color:#888; margin-top:-20px;">The enemy has been eliminated.</h2>
+                <button class="btn-secondary" onclick="resetToMenu()" style="margin-top:40px;">RETURN TO MENU</button>
+            </div>
+        </div>
+
+        <!-- Bottom UI: Controls -->
+        <div id="bottom-bar">
+            <span style="color:#666; font-size: 0.8rem; font-weight:bold; letter-spacing:1px;">SPEED</span>
+            <button class="speed-btn active" onclick="setSpeed(1)">1x</button>
+            <button class="speed-btn" onclick="setSpeed(2)">2x</button>
+            <button class="speed-btn" onclick="setSpeed(3)">3x</button>
+            <button class="speed-btn" onclick="setSpeed(4)">4x</button>
+            <button class="speed-btn" onclick="setSpeed(5)">MAX</button>
+            <button class="btn-stop" onclick="stopSimulation()">STOP & EXIT</button>
+        </div>
+
+    </div>
+
+    <script>
+        // --- CONSTANTS ---
+        const TILE_SIZE = 10;
+        
+        // --- GLOBALS ---
+        const appLayout = document.getElementById('app-layout');
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        let grid = [];
+        let balls = [];
+        let powerUp = null;
+        let animationId;
+        let isRunning = false;
+        let simulationSpeed = 1;
+        let COLS, ROWS;
+        
+        // UI Elements
+        const mainMenu = document.getElementById('main-menu');
+        const victoryScreen = document.getElementById('victory-screen');
+        const hpBar1 = document.getElementById('hp-bar-1');
+        const hpBar2 = document.getElementById('hp-bar-2');
+        const nameDisp1 = document.getElementById('name-display-1');
+        const nameDisp2 = document.getElementById('name-display-2');
+        const winnerText = document.getElementById('winner-text');
+        const speedBtns = document.querySelectorAll('.speed-btn');
+
+        // --- HELPER: FILE READING & COLOR EXTRACTION ---
+        
+        function readImageFile(inputElement) {
+            return new Promise((resolve) => {
+                if (inputElement.files && inputElement.files[0]) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => resolve(e.target.result); // Returns Data URL
+                    reader.readAsDataURL(inputElement.files[0]);
+                } else {
+                    resolve(null);
+                }
+            });
+        }
+
+        async function getDominantColor(imgSrc, fallbackColor) {
+            return new Promise((resolve) => {
+                if (!imgSrc) {
+                    resolve({ color: fallbackColor, imgObj: null });
+                    return;
+                }
+
+                const img = new Image();
+                img.crossOrigin = "Anonymous"; 
+                
+                img.onload = function() {
+                    try {
+                        const vCanvas = document.createElement('canvas');
+                        vCanvas.width = 1;
+                        vCanvas.height = 1;
+                        const vCtx = vCanvas.getContext('2d');
+                        vCtx.drawImage(img, 0, 0, 1, 1);
+                        const p = vCtx.getImageData(0, 0, 1, 1).data;
+                        const hex = "#" + ((1 << 24) + (p[0] << 16) + (p[1] << 8) + p[2]).toString(16).slice(1);
+                        resolve({ color: hex, imgObj: img });
+                    } catch (e) {
+                        console.warn("Color extraction failed.", e);
+                        resolve({ color: fallbackColor, imgObj: img });
+                    }
+                };
+
+                img.onerror = function() {
+                    console.warn("Image failed to load.");
+                    resolve({ color: fallbackColor, imgObj: null });
+                };
+
+                img.src = imgSrc;
+            });
+        }
+
+
+        // --- CLASSES ---
+
+        class Ball {
+            constructor(x, y, dx, dy, ownerIndex, config) {
+                this.x = x;
+                this.y = y;
+                this.dx = dx;
+                this.dy = dy;
+                this.owner = ownerIndex;
+                this.radius = 12; 
+                this.maxHealth = 100;
+                this.health = 100;
+                
+                this.name = config.name;
+                this.color = config.color;
+                this.img = config.imgObj || null; 
+                
+                this.bounceCooldown = 0;
+                this.powerUpTime = 0;
+            }
+
+            update() {
+                if (this.health <= 0) return;
+
+                if (this.bounceCooldown > 0) this.bounceCooldown--;
+                if (this.powerUpTime > 0) this.powerUpTime--;
+
+                let nextX = this.x + this.dx;
+                let nextY = this.y + this.dy;
+
+                // Wall Bounce
+                if (nextX - this.radius < 0 || nextX + this.radius > canvas.width) {
+                    this.dx = -this.dx;
+                    nextX = this.x + this.dx;
+                }
+                if (nextY - this.radius < 0 || nextY + this.radius > canvas.height) {
+                    this.dy = -this.dy;
+                    nextY = this.y + this.dy;
+                }
+
+                // PowerUp
+                if (powerUp && powerUp.active) {
+                    const dist = Math.hypot(this.x - powerUp.x, this.y - powerUp.y);
+                    if (dist < this.radius + powerUp.radius) {
+                        powerUp.active = false;
+                        this.powerUpTime = 600;
+                    }
+                }
+
+                // Grid Interaction
+                let checkX = this.x + (this.dx * 1.5);
+                let checkY = this.y + (this.dy * 1.5);
+                let gridX = Math.floor(checkX / TILE_SIZE);
+                let gridY = Math.floor(checkY / TILE_SIZE);
+                
+                gridX = Math.max(0, Math.min(COLS - 1, gridX));
+                gridY = Math.max(0, Math.min(ROWS - 1, gridY));
+
+                const tileOwner = grid[gridY][gridX];
+
+                if (tileOwner !== this.owner) {
+                    // Explode or Capture
+                    if (this.powerUpTime > 0) {
+                        this.explodeTerritory(gridX, gridY);
+                    } else {
+                        grid[gridY][gridX] = this.owner;
+                    }
+
+                    // Physics Bounce (with anti-loop jitter)
+                    if (this.bounceCooldown === 0) {
+                        let prevGridX = Math.floor(this.x / TILE_SIZE);
+                        let prevGridY = Math.floor(this.y / TILE_SIZE);
+                        
+                        let hitX = prevGridX !== gridX;
+                        let hitY = prevGridY !== gridY;
+
+                        if (hitX) this.dx = -this.dx;
+                        if (hitY) this.dy = -this.dy;
+                        if (!hitX && !hitY) {
+                            this.dx = -this.dx;
+                            this.dy = -this.dy;
+                        }
+
+                        const speed = Math.hypot(this.dx, this.dy);
+                        const angle = Math.atan2(this.dy, this.dx);
+                        const jitter = (Math.random() - 0.5) * 0.5;
+                        const newAngle = angle + jitter;
+                        
+                        this.dx = Math.cos(newAngle) * speed;
+                        this.dy = Math.sin(newAngle) * speed;
+
+                        this.bounceCooldown = 4;
+                    }
+                }
+
+                this.x += this.dx;
+                this.y += this.dy;
+            }
+
+            explodeTerritory(gx, gy) {
+                const rad = 8;
+                for (let y = -rad; y <= rad; y++) {
+                    for (let x = -rad; x <= rad; x++) {
+                        let ny = gy + y;
+                        let nx = gx + x;
+                        if (ny >= 0 && ny < ROWS && nx >= 0 && nx < COLS) {
+                            if (x*x + y*y <= rad*rad) grid[ny][nx] = this.owner;
+                        }
+                    }
+                }
+                balls.forEach(b => {
+                    if (b.owner !== this.owner && b.health > 0) {
+                        const dist = Math.hypot(b.x - gx*TILE_SIZE, b.y - gy*TILE_SIZE);
+                        if (dist < rad * TILE_SIZE) b.takeDamage(20);
+                    }
+                });
+            }
+
+            takeDamage(amount) {
+                this.health = Math.max(0, this.health - amount);
+                updateHealthBars();
+            }
+
+            draw() {
+                if (this.health <= 0) return;
+
+                ctx.save();
+                ctx.translate(this.x, this.y);
+
+                if (this.powerUpTime > 0) {
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.radius + 5, 0, Math.PI * 2);
+                    ctx.strokeStyle = `rgba(255, 215, 0, ${0.5 + Math.sin(Date.now()/100)*0.4})`;
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                }
+
+                ctx.beginPath();
+                ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+                ctx.closePath();
+                ctx.clip(); 
+
+                if (this.img) {
+                    try {
+                        ctx.drawImage(this.img, -this.radius, -this.radius, this.radius*2, this.radius*2);
+                    } catch(e) {
+                        ctx.fillStyle = this.color;
+                        ctx.fill();
+                    }
+                } else {
+                    ctx.fillStyle = this.color;
+                    ctx.fill();
+                }
+
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#fff';
+                ctx.stroke();
+
+                ctx.restore();
+            }
+        }
+
+        class PowerUp {
+            constructor() {
+                this.active = false;
+                this.x = 0; this.y = 0;
+                this.radius = 12;
+                this.pulse = 0;
+                this.timer = 0;
+            }
+
+            update() {
+                if(this.active) {
+                    this.pulse += 0.1;
+                } else {
+                    this.timer++;
+                    if(this.timer > 300 && Math.random() < 0.01) {
+                        this.spawn();
+                    }
+                }
+            }
+
+            spawn() {
+                this.active = true;
+                this.x = 50 + Math.random() * (canvas.width - 100);
+                this.y = 50 + Math.random() * (canvas.height - 100);
+                this.timer = 0;
+            }
+
+            draw() {
+                if(!this.active) return;
+                const scale = 1 + Math.sin(this.pulse) * 0.2;
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.scale(scale, scale);
+                ctx.fillStyle = "#FFD700";
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = "#FFD700";
+                ctx.beginPath();
+                ctx.moveTo(0, -this.radius);
+                ctx.lineTo(this.radius, 0);
+                ctx.lineTo(0, this.radius);
+                ctx.lineTo(-this.radius, 0);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // --- CORE LOGIC ---
+
+        function initGrid() {
+            grid = [];
+            for (let y = 0; y < ROWS; y++) {
+                let row = [];
+                for (let x = 0; x < COLS; x++) {
+                    row.push(x < COLS / 2 ? 0 : 1);
+                }
+                grid.push(row);
+            }
+        }
+
+        // --- ENHANCED TERRITORY LABEL LOGIC (PCA) ---
+        // Fits text to the shape of the territory using orientation and spread.
+        function drawTerritoryLabels() {
+            // Player Stat Containers
+            let players = [
+                { points: [], name: balls[0].name, color: balls[0].color, alive: balls[0].health > 0 },
+                { points: [], name: balls[1].name, color: balls[1].color, alive: balls[1].health > 0 }
+            ];
+
+            // 1. Gather points (Sub-sample for performance)
+            const STEP = 2; 
+            for (let y = 0; y < ROWS; y += STEP) {
+                for (let x = 0; x < COLS; x += STEP) {
+                    const owner = grid[y][x];
+                    players[owner].points.push({ x: x * TILE_SIZE, y: y * TILE_SIZE });
+                }
+            }
+
+            // 2. Compute PCA for each player
+            players.forEach(p => {
+                if (p.points.length < 20 || !p.alive) return; // Need critical mass
+
+                // -- Mean (Center) --
+                let sumX = 0, sumY = 0;
+                for (let pt of p.points) { sumX += pt.x; sumY += pt.y; }
+                const cx = sumX / p.points.length;
+                const cy = sumY / p.points.length;
+
+                // -- Covariance --
+                let covXX = 0, covXY = 0, covYY = 0;
+                for (let pt of p.points) {
+                    const dx = pt.x - cx;
+                    const dy = pt.y - cy;
+                    covXX += dx * dx;
+                    covXY += dx * dy;
+                    covYY += dy * dy;
+                }
+                covXX /= p.points.length;
+                covXY /= p.points.length;
+                covYY /= p.points.length;
+
+                // -- Eigenvalues/Vectors for Rotation (Angle) --
+                // theta = 0.5 * atan2(2*covXY, covXX - covYY)
+                const theta = 0.5 * Math.atan2(2 * covXY, covXX - covYY);
+                
+                // -- Spread (Approximation using Standard Deviation along axes) --
+                // We rotate points mentally to finding bounding box on principal axes would be best,
+                // but using eigenvalues is a direct shortcut for "spread".
+                // lambda1,2 = ((xx+yy) +/- sqrt((xx-yy)^2 + 4xy^2)) / 2
+                const trace = covXX + covYY;
+                const det = Math.sqrt((covXX - covYY)**2 + 4 * covXY**2);
+                const lambda1 = (trace + det) / 2; // Major axis variance
+                const lambda2 = (trace - det) / 2; // Minor axis variance
+                
+                const stdDev1 = Math.sqrt(lambda1); // Spread along length
+                const stdDev2 = Math.sqrt(lambda2); // Spread along width (height)
+
+                // -- Draw Text --
+                ctx.save();
+                ctx.translate(cx, cy);
+                ctx.rotate(theta);
+                
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                
+                // Dynamic Font Sizing
+                // Font height proportional to minor axis (width of territory)
+                // We clamp it so it doesn't get ridiculously small or large
+                let fontSize = Math.max(12, Math.min(80, stdDev2 * 1.5));
+                
+                // Check length scaling: Ensure text fits along the major axis
+                ctx.font = `900 ${fontSize}px 'Segoe UI', Arial`;
+                const textMetrics = ctx.measureText(p.name);
+                const textWidth = textMetrics.width;
+                
+                // If text is too long for the territory length (stdDev1 * ~4 covers ~95% of mass), scale it down horizontally
+                // We use a "stretch" factor. If the territory is long, we can stretch the text slightly.
+                // But usually we just want to scale it to FIT.
+                const availableWidth = stdDev1 * 4; 
+                let scaleX = 1;
+                if (textWidth > availableWidth) {
+                    scaleX = availableWidth / textWidth;
+                } else if (availableWidth > textWidth * 1.5) {
+                    // Slight stretch to fill if lots of space, but cap it so it stays readable
+                    scaleX = Math.min(2.0, availableWidth / textWidth * 0.5); 
+                }
+
+                ctx.scale(scaleX, 1);
+
+                // Style
+                ctx.fillStyle = "rgba(255,255,255,0.4)"; // Subtle Watermark style
+                ctx.fillText(p.name, 0, 0);
+                
+                // Optional: Outline for better visibility
+                // ctx.strokeStyle = "rgba(0,0,0,0.2)";
+                // ctx.lineWidth = 2;
+                // ctx.strokeText(p.name, 0, 0);
+
+                ctx.restore();
+            });
+        }
+
+        function drawGrid() {
+            for (let y = 0; y < ROWS; y++) {
+                for (let x = 0; x < COLS; x++) {
+                    ctx.fillStyle = balls[grid[y][x]].color;
+                    ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE+1, TILE_SIZE+1);
+                }
+            }
+        }
+
+        function updateHealthBars() {
+            const p1Pct = (balls[0].health / balls[0].maxHealth) * 100;
+            const p2Pct = (balls[1].health / balls[1].maxHealth) * 100;
+            
+            hpBar1.style.width = p1Pct + "%";
+            hpBar2.style.width = p2Pct + "%";
+
+            if (balls[0].health <= 0) endGame(1);
+            else if (balls[1].health <= 0) endGame(0);
+        }
+
+        function endGame(winnerIdx) {
+            isRunning = false;
+            cancelAnimationFrame(animationId);
+            winnerText.innerText = balls[winnerIdx].name + " WINS!";
+            winnerText.style.color = balls[winnerIdx].color;
+            victoryScreen.classList.remove('hidden');
+        }
+
+        function loop() {
+            if (!isRunning) return;
+
+            for(let i=0; i<simulationSpeed; i++) {
+                balls.forEach(b => b.update());
+                if(powerUp) powerUp.update();
+                if(balls[0].health <= 0 || balls[1].health <= 0) break;
+            }
+
+            ctx.clearRect(0,0, canvas.width, canvas.height);
+            
+            drawGrid();
+            drawTerritoryLabels(); 
+            if(powerUp) powerUp.draw();
+            balls.forEach(b => b.draw());
+
+            animationId = requestAnimationFrame(loop);
+        }
+
+        // --- INIT & CONTROLS ---
+
+        async function startSimulation() {
+            // Read Images First
+            const p1File = document.getElementById('p1-file');
+            const p2File = document.getElementById('p2-file');
+            
+            const p1ImgSrc = await readImageFile(p1File);
+            const p2ImgSrc = await readImageFile(p2File);
+
+            const rInput = document.getElementById('rowsInput').value;
+            const cInput = document.getElementById('colsInput').value;
+            ROWS = Math.max(20, Math.min(100, parseInt(rInput)));
+            COLS = Math.max(20, Math.min(100, parseInt(cInput)));
+            
+            canvas.width = COLS * TILE_SIZE;
+            canvas.height = ROWS * TILE_SIZE;
+
+            // Colors
+            const p1Color = document.getElementById('p1-color').value;
+            const p2Color = document.getElementById('p2-color').value;
+
+            // Process Data
+            const p1Data = await getDominantColor(p1ImgSrc, p1Color);
+            const p2Data = await getDominantColor(p2ImgSrc, p2Color);
+            
+            balls = [];
+            const speed = 2;
+
+            // Ball 1
+            balls.push(new Ball(
+                canvas.width * 0.25, canvas.height * 0.5, 
+                speed, -speed, 0, 
+                { 
+                    name: document.getElementById('p1-name').value || "Player 1", 
+                    color: p1Data.color,
+                    imgObj: p1Data.imgObj 
+                }
+            ));
+
+            // Ball 2
+            balls.push(new Ball(
+                canvas.width * 0.75, canvas.height * 0.5, 
+                -speed, speed, 1, 
+                { 
+                    name: document.getElementById('p2-name').value || "Player 2", 
+                    color: p2Data.color,
+                    imgObj: p2Data.imgObj 
+                }
+            ));
+
+            initGrid();
+            powerUp = new PowerUp();
+            
+            // Update Top Bar
+            nameDisp1.innerText = balls[0].name;
+            nameDisp1.style.color = balls[0].color;
+            hpBar1.style.background = balls[0].color;
+            
+            nameDisp2.innerText = balls[1].name;
+            nameDisp2.style.color = balls[1].color;
+            hpBar2.style.background = balls[1].color;
+
+            updateHealthBars();
+
+            // UI Transition
+            appLayout.classList.remove('ui-hidden'); // Show HUD
+            mainMenu.classList.add('hidden'); // Hide Menu
+            victoryScreen.classList.add('hidden');
+            
+            isRunning = true;
+            loop();
+        }
+
+        function resetToMenu() {
+            victoryScreen.classList.add('hidden');
+            mainMenu.classList.remove('hidden');
+            appLayout.classList.add('ui-hidden'); // Hide HUD
+        }
+
+        function stopSimulation() {
+            isRunning = false;
+            cancelAnimationFrame(animationId);
+            mainMenu.classList.remove('hidden');
+            appLayout.classList.add('ui-hidden'); // Hide HUD
+        }
+
+        function setSpeed(val) {
+            simulationSpeed = val;
+            speedBtns.forEach((b, i) => {
+                if(i+1 === val) b.classList.add('active');
+                else b.classList.remove('active');
+            });
+        }
+    </script>
+</body>
+</html>
